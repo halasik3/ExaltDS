@@ -24,7 +24,7 @@ import java.util.*;
  * frame rate, 16:9, feet, resolution, HD textures, mods and the GPU driver.
  */
 final class Sidebar {
-    static final int PICK_MOD = 0x5100, PICK_DRIVER = 0x5101, PICK_CODE = 0x5102, PICK_ZIP = 0x5103, EXPORT_SAVES = 0x5104, IMPORT_SAVES = 0x5105, PICK_MOVIES = 0x5106;
+    static final int PICK_MOD = 0x5100, PICK_DRIVER = 0x5101, PICK_CODE = 0x5102, PICK_ZIP = 0x5103, EXPORT_SAVES = 0x5104, IMPORT_SAVES = 0x5105, PICK_MOVIES = 0x5106, PICK_MOVIES_FOLDER = 0x5107;
     private static final String[] COMBAT = {"30 fps (original)", "60 fps, original speed", "60 fps, faster"};
     private static final String[] PERF = {"Off", "FPS", "FPS + frame time", "FPS + frame time + temps"};
 
@@ -388,8 +388,9 @@ final class Sidebar {
         mods.addView(row("Remove a mod…", v -> removeMod()));
         mods.addView(row("Remove texture pack…", v -> removePack()));
         mods.addView(row("Import HD cutscenes…", v -> pickMovies()));
+        mods.addView(row("Import HD cutscenes from folder…", v -> pickMoviesFolder()));
         mods.addView(row("Remove HD cutscenes…", v -> removeMovies()));
-        TextView note = text("Choose ZIPs as downloaded (several at once is fine) or an extracted folder. A mod holds a romfs folder (like the feet mod); a texture pack holds PNG pictures and is added to the installed pack. Changes apply after Apply and restart.\n\nHD cutscenes are MovieOP.mp4 and Movie01.mp4 to Movie13.mp4, made on a PC from your own Fire Emblem HD Movie Collection Blu-ray with ExaltDS's tools/hd-movies. Choose the files, or ZIPs holding them; they play from the next cutscene, no restart.", 12, Exalt.MUTED);
+        TextView note = text("Choose ZIPs as downloaded (several at once is fine) or an extracted folder. A mod holds a romfs folder (like the feet mod); a texture pack holds PNG pictures and is added to the installed pack. Changes apply after Apply and restart.\n\nHD cutscenes are MovieOP.mp4 and Movie01.mp4 to Movie13.mp4, made on a PC from your own Fire Emblem HD Movie Collection Blu-ray with ExaltDS's tools/hd-movies. Choose the files (or ZIPs holding them), or the folder they are in; they play from the next cutscene, no restart.", 12, Exalt.MUTED);
         note.setPadding(px(20), px(8), px(20), px(12));
         mods.addView(note);
     }
@@ -485,11 +486,19 @@ final class Sidebar {
     }
 
     private void pickMovies() {
+        // every file: storage on SD cards and some file managers report .mp4 as unknown data, which a video filter
+        // hides; the import itself keeps only Movie*.mp4 and ZIPs
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                .putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"video/mp4", "application/zip", "application/x-zip-compressed", "application/x-zip"});
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         try { game.startActivityForResult(intent, PICK_MOVIES); }
         catch (android.content.ActivityNotFoundException e) { toast("No file picker is available."); }
+    }
+
+    /** A folder (the PC tool's hd_movies): every Movie*.mp4 in it. */
+    private void pickMoviesFolder() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try { game.startActivityForResult(intent, PICK_MOVIES_FOLDER); }
+        catch (android.content.ActivityNotFoundException e) { toast("No folder picker is available."); }
     }
 
     /** Copies the picked HD cutscenes in on a background thread; they play from the next cutscene on. */
@@ -585,6 +594,13 @@ final class Sidebar {
             if (code == android.app.Activity.RESULT_OK && data != null && data.getData() != null && !busy) {
                 if (request == EXPORT_SAVES) exportTo(data.getData()); else importFrom(data.getData());
             }
+            return true;
+        }
+        if (request == PICK_MOVIES_FOLDER) {
+            if (code != android.app.Activity.RESULT_OK || data == null || data.getData() == null || busy) return true;
+            List<Uri> picked = HdMovies.inFolder(game, data.getData());
+            if (picked.isEmpty()) toast("No HD cutscenes in that folder. They are named MovieOP.mp4 and Movie01.mp4 to Movie13.mp4.");
+            else importMovies(picked);
             return true;
         }
         if (request == PICK_MOVIES) {

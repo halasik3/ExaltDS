@@ -104,6 +104,21 @@ final class HdMovies implements android.view.Choreographer.FrameCallback {
 
     static void removeAll(Context c, String id) throws IOException { GameImport.remove(dir(c, id)); }
 
+    /** The movie files (and ZIPs) directly in a folder picked with ACTION_OPEN_DOCUMENT_TREE. */
+    static List<Uri> inFolder(Context c, Uri tree) {
+        List<Uri> found = new java.util.ArrayList<>();
+        Uri children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(tree, android.provider.DocumentsContract.getTreeDocumentId(tree));
+        String[] columns = {android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID, android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME};
+        try (android.database.Cursor cursor = c.getContentResolver().query(children, columns, null, null, null)) {
+            while (cursor != null && cursor.moveToNext()) {
+                String name = cursor.getString(1);
+                if (name != null && NAME.matcher(name).matches())
+                    found.add(android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(0)));
+            }
+        } catch (RuntimeException e) { android.util.Log.w("Zakuro", "Listing the HD cutscenes folder", e); }
+        return found;
+    }
+
     private static void copy(InputStream in, File dir, String name) throws IOException {
         // the movie's name as the game spells it: MovieOP, Movie04
         String canonical = "Movie" + name.substring(5).toUpperCase(Locale.ROOT);
