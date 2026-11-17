@@ -114,8 +114,12 @@ def main():
         target = RENAMES.get(name.encode(), name.encode()).decode()
         open(os.path.join(libs, target), 'wb').write(renamed(files['lib/' + name]))
 
-    sysroot = os.path.join(ndk, 'toolchains', 'llvm', 'prebuilt', 'windows-x86_64', 'sysroot')
-    clang_lib = os.path.join(ndk, 'toolchains', 'llvm', 'prebuilt', 'windows-x86_64', 'lib', 'clang')
+    # the NDK's prebuilt folder is named for the machine it runs on: windows-x86_64, linux-x86_64, darwin-x86_64
+    prebuilt = os.path.join(ndk, 'toolchains', 'llvm', 'prebuilt')
+    hosts = sorted(os.listdir(prebuilt))
+    host = 'windows-x86_64' if 'windows-x86_64' in hosts else hosts[0]
+    sysroot = os.path.join(prebuilt, host, 'sysroot')
+    clang_lib = os.path.join(prebuilt, host, 'lib', 'clang')
     os.makedirs(os.path.join(out, 'assets'), exist_ok=True)
     with zipfile.ZipFile(os.path.join(out, 'assets', 'clang-kit.zip'), 'w', zipfile.ZIP_DEFLATED) as kit:
         for path, data in sorted(files.items()):
