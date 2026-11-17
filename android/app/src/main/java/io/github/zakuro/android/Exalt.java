@@ -23,7 +23,8 @@ import java.util.*;
  */
 final class Exalt {
     static final String PACKAGE = "io.github.exaltds";
-    static boolean is(Context c) { return PACKAGE.equals(c.getPackageName()); }
+    /** ExaltDS, or a build of it under its own package beside it (io.github.exaltds.hd, see android/scripts/ci-exalt.sh). */
+    static boolean is(Context c) { String name = c.getPackageName(); return PACKAGE.equals(name) || name.startsWith(PACKAGE + "."); }
 
     // ---- colours: Chrom's navy and the Exalt's gold ----
     static final int PANEL_TOP = 0xF7152044, PANEL_BOTTOM = 0xF70A0F22;

@@ -1,0 +1,55 @@
+# Builds the ExaltDS APK on GitHub: Actions tab -> "Build ExaltDS" -> Run workflow (or push to a branch it watches),
+# then download the APK from the run's Artifacts. See android/scripts/ci-exalt.sh for what it builds.
+name: Build ExaltDS
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "hd: 'ExaltDS HD', installs beside the released ExaltDS. main: io.github.exaltds (replaces it; needs uninstalling it first)"
+        type: choice
+        options: [hd, main]
+        default: hd
+  push:
+    branches: [hd-cutscenes]
+    paths-ignore: ["**.md", "docs/**", "tools/hd-movies/**"]
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Android SDK packages and NDK r27c
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0" "platforms;android-35" "ndk;27.2.12479018" > /dev/null
+          echo "ANDROID_NDK=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - name: Rust 1.95.0
+        run: rustup toolchain install 1.95.0 --profile minimal --target aarch64-linux-android
+      - name: Ninja
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      - uses: actions/cache@v4
+        with:
+          path: build/clang-kit-cache
+          key: clang-kit-${{ hashFiles('android/exalt/clang-kit.py') }}
+      - name: Build
+        env:
+          VARIANT: ${{ inputs.variant || 'hd' }}
+        run: bash android/scripts/ci-exalt.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exaltds-apk
+          path: build/android-ci/*.apk*
+          if-no-files-found: error
