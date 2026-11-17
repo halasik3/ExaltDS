@@ -1191,6 +1191,16 @@ fn read_file(system: &mut System, file_id: u32, offset: u64, size: u32, dest: u3
                 return 0;
             }
             let count = (size as u64).min(total - offset) as usize;
+            if is_romfs(&file.path) {
+                let data = image.data();
+                let key = (std::sync::Arc::as_ptr(&image) as *const u8 as usize, base);
+                crate::movies::note_read(key, offset, count as u64, |at, out| {
+                    let start = (base + at).min(base + total) as usize;
+                    let n = out.len().min((base + total) as usize - start).min(data.len().saturating_sub(start));
+                    out[..n].copy_from_slice(&data[start..start + n]);
+                    n
+                });
+            }
             let start = (base + offset) as usize;
             let Some(slice) = image.data().get(start..start + count) else {
                 log::warn!("fs: read past the end of the ROM image");
@@ -1218,12 +1228,22 @@ fn read_file(system: &mut System, file_id: u32, offset: u64, size: u32, dest: u3
             count as u32
         }
         FileBacking::Layered(layered, image) => {
+            if is_romfs(&file.path) {
+                let key = (std::sync::Arc::as_ptr(&layered) as *const u8 as usize, 0);
+                crate::movies::note_read(key, offset, size as u64, |at, out| layered.read(image.data(), at, out));
+            }
             let mut data = vec![0u8; (size as u64).min(layered.len().saturating_sub(offset)) as usize];
             let count = layered.read(image.data(), offset, &mut data);
             system.write_from_service(dest, &data[..count]);
             count as u32
         }
     }
+}
+
+/// whether an open file is a title's RomFS (its own or its update's), which the movie watch looks
+/// at, see movies.rs.
+fn is_romfs(path: &str) -> bool {
+    path == "romfs:/" || path == "patch:/"
 }
 
 fn decode_path(system: &mut System, path_type: u32, path_size: u32, path_ptr: u32) -> String {

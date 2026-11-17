@@ -153,6 +153,15 @@ impl Surface {
     }
     /// presents the screens, or leaves out (Ok(false)) a present that would show exactly the
     /// pictures the last one did, as `repeats` says.
+    /// where this window shows the screens, as present places them.
+    fn places(&self, system: &System) -> Vec<(zakuro_gpu::Viewport, zakuro_gpu::Shown)> {
+        geometry::places(
+            &self.settings,
+            self.window.0.width().max(1) as u32,
+            self.window.0.height().max(1) as u32,
+            system.draws_in_3d(),
+        )
+    }
     fn present(
         &mut self,
         system: &mut System,
@@ -1117,6 +1126,7 @@ pub fn run(app: &AndroidApp) -> Result<(), String> {
         let repeats = Repeats::chosen(present_switches, generating);
         let mut skipped_repeat = false;
         if vsync || present_start >= next_present {
+            crate::movies::placed(false, Some(&s.places(&*system)));
             match s.present(
                 system,
                 (settings.right_stick == RightStick::Cursor).then_some(input.cursor),
@@ -1131,6 +1141,7 @@ pub fn run(app: &AndroidApp) -> Result<(), String> {
                 Err(PresentError::OutOfDate) => {}
                 Err(e) => return Err(e.to_string()),
             }
+            crate::movies::placed(true, second.as_ref().map(|external| external.places(&*system)).as_deref());
             if let Some(external) = &mut second {
                 // Separate Vulkan devices cannot consume the main renderer's image views.
                 if let Err(error) = external.present(

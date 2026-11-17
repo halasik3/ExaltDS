@@ -14,6 +14,7 @@ pub mod loader;
 pub mod memory;
 pub mod microphone;
 pub mod mods;
+pub mod movies;
 pub mod replay;
 pub mod room;
 pub mod recompiled;

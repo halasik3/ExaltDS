@@ -24,7 +24,7 @@ import java.util.*;
  * frame rate, 16:9, feet, resolution, HD textures, mods and the GPU driver.
  */
 final class Sidebar {
-    static final int PICK_MOD = 0x5100, PICK_DRIVER = 0x5101, PICK_CODE = 0x5102, PICK_ZIP = 0x5103, EXPORT_SAVES = 0x5104, IMPORT_SAVES = 0x5105;
+    static final int PICK_MOD = 0x5100, PICK_DRIVER = 0x5101, PICK_CODE = 0x5102, PICK_ZIP = 0x5103, EXPORT_SAVES = 0x5104, IMPORT_SAVES = 0x5105, PICK_MOVIES = 0x5106;
     private static final String[] COMBAT = {"30 fps (original)", "60 fps, original speed", "60 fps, faster"};
     private static final String[] PERF = {"Off", "FPS", "FPS + frame time", "FPS + frame time + temps"};
 
@@ -313,6 +313,11 @@ final class Sidebar {
         CheckBox hd = check("HD textures", pack && s.textures, on -> { s.textures = on; save(); });
         if (!pack) { hd.setEnabled(false); hd.setAlpha(0.45f); hd.setText("HD textures: import a pack in Mods / textures"); }
         main.addView(hd);
+        // the HD cutscenes switch takes effect at once, no restart
+        int movies = HdMovies.installed(game, id).size();
+        CheckBox hdMovies = check("HD cutscenes", movies > 0 && HdMovies.enabled(game, id), on -> game.setHdMovies(on));
+        if (movies == 0) { hdMovies.setEnabled(false); hdMovies.setAlpha(0.45f); hdMovies.setText("HD cutscenes: import them in Mods / textures"); }
+        main.addView(hdMovies);
         main.addView(divider());
 
         // (Recall Fate is chosen from the game's own map menu; "Replace native game code" is left out for now: setup
@@ -382,7 +387,9 @@ final class Sidebar {
         mods.addView(row("Import from folder…", v -> pick(PICK_MOD)));
         mods.addView(row("Remove a mod…", v -> removeMod()));
         mods.addView(row("Remove texture pack…", v -> removePack()));
-        TextView note = text("Choose ZIPs as downloaded (several at once is fine) or an extracted folder. A mod holds a romfs folder (like the feet mod); a texture pack holds PNG pictures and is added to the installed pack. Changes apply after Apply and restart.", 12, Exalt.MUTED);
+        mods.addView(row("Import HD cutscenes…", v -> pickMovies()));
+        mods.addView(row("Remove HD cutscenes…", v -> removeMovies()));
+        TextView note = text("Choose ZIPs as downloaded (several at once is fine) or an extracted folder. A mod holds a romfs folder (like the feet mod); a texture pack holds PNG pictures and is added to the installed pack. Changes apply after Apply and restart.\n\nHD cutscenes are MovieOP.mp4 and Movie01.mp4 to Movie13.mp4, made on a PC from your own Fire Emblem HD Movie Collection Blu-ray with ExaltDS's tools/hd-movies. Choose the files, or ZIPs holding them; they play from the next cutscene, no restart.", 12, Exalt.MUTED);
         note.setPadding(px(20), px(8), px(20), px(12));
         mods.addView(note);
     }
@@ -393,7 +400,8 @@ final class Sidebar {
         for (Exalt.Layer l : layers)
             modsList.addView(check(l.name, l.on, on -> { Exalt.setOn(game, id, l.name, on); modsChanged = true; refreshApply(); }));
         modsStatus.setText((layers.isEmpty() ? "No mods imported." : layers.size() + (layers.size() == 1 ? " mod." : " mods."))
-                + "\nHD texture pack: " + (hasPack() ? (s.textures ? "installed, on" : "installed, off") : "none"));
+                + "\nHD texture pack: " + (hasPack() ? (s.textures ? "installed, on" : "installed, off") : "none")
+                + "\nHD cutscenes: " + HdMovies.installed(game, id).size() + " of " + HdMovies.COUNT);
     }
 
     private void recallFate() {
@@ -476,6 +484,41 @@ final class Sidebar {
         catch (android.content.ActivityNotFoundException e) { toast("No file picker is available."); }
     }
 
+    private void pickMovies() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                .putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"video/mp4", "application/zip", "application/x-zip-compressed", "application/x-zip"});
+        try { game.startActivityForResult(intent, PICK_MOVIES); }
+        catch (android.content.ActivityNotFoundException e) { toast("No file picker is available."); }
+    }
+
+    /** Copies the picked HD cutscenes in on a background thread; they play from the next cutscene on. */
+    private void importMovies(List<Uri> uris) {
+        busy = true;
+        toast("Importing HD cutscenes…");
+        new Thread(() -> {
+            String message;
+            try { message = HdMovies.importFrom(game, id, uris); }
+            catch (Exception e) { message = "Import failed: " + e.getMessage(); }
+            String done = message;
+            game.runOnUiThread(() -> { busy = false; game.refreshHdMovies(); refreshMods(); toast(done); });
+        }, "exalt-hd-movies").start();
+    }
+
+    private void removeMovies() {
+        int count = HdMovies.installed(game, id).size();
+        if (count == 0) { toast("No HD cutscenes installed."); return; }
+        AlertDialog d = new AlertDialog.Builder(game, game.palette().dialogTheme()).setTitle("Remove HD cutscenes?")
+                .setMessage("The " + count + " installed HD cutscenes are deleted; the game's own cutscenes play again.")
+                .setPositiveButton("Remove", (x, w) -> {
+                    try { HdMovies.removeAll(game, id); toast("HD cutscenes removed."); }
+                    catch (Exception e) { toast("Could not remove them: " + e.getMessage()); }
+                    game.refreshHdMovies(); refreshMods();
+                })
+                .setNegativeButton("Cancel", null).create();
+        d.show(); game.palette().dialog(d, false);
+    }
+
     private void exportSaves() {
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE)
                 .putExtra(Intent.EXTRA_TITLE, "ExaltDS-saves.zip");
@@ -542,6 +585,14 @@ final class Sidebar {
             if (code == android.app.Activity.RESULT_OK && data != null && data.getData() != null && !busy) {
                 if (request == EXPORT_SAVES) exportTo(data.getData()); else importFrom(data.getData());
             }
+            return true;
+        }
+        if (request == PICK_MOVIES) {
+            if (code != android.app.Activity.RESULT_OK || data == null || busy) return true;
+            List<Uri> picked = new ArrayList<>();
+            if (data.getClipData() != null) for (int i = 0; i < data.getClipData().getItemCount(); i++) picked.add(data.getClipData().getItemAt(i).getUri());
+            else if (data.getData() != null) picked.add(data.getData());
+            if (!picked.isEmpty()) importMovies(picked);
             return true;
         }
         if (request != PICK_MOD && request != PICK_ZIP && request != PICK_DRIVER && request != PICK_CODE) return false;

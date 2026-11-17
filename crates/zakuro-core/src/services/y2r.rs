@@ -593,6 +593,8 @@ fn convert(system: &mut System) {
     system.sync_gpu(output.address, end.wrapping_sub(output.address));
     scatter(system, output, &scratch.out);
     system.services.y2r.scratch = scratch;
+    // a movie frame on its way to the screen, see movies.rs
+    crate::movies::note_frame(width, lines, system.cpu.cycles);
 }
 
 #[cfg(test)]

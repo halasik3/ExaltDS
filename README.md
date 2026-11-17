@@ -63,6 +63,8 @@ option removes it, so characters and grass stay crisp without a halo and without
 - **Feet on the ground:** the feet mod from the
   [Fire Emblem: Awakening recompilation project](https://github.com/Zelkin1/fe-awakening-recomp), built from your copy.
 - **HD texture packs**, if you have one (not included).
+- **HD cutscenes** from your own *Fire Emblem HD Movie Collection* Blu-ray, in 16:9 and in step with the game's own
+  movies: [tools/hd-movies](tools/hd-movies/README.md) makes them on a PC (not included).
 - **A sidebar** (press Back in game) with save states, Quick Save and Quick Load, a performance monitor, a clock, mods,
   and GPU drivers.
 - **Updates from inside the app.**

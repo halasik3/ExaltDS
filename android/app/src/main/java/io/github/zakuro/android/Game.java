@@ -18,6 +18,17 @@ public final class Game extends NativeActivity {
     private native void nativeCommand(int command);
     private native int nativeFrameTimes(int[] out);
     private native int nativeRecallTurns(int[] out);
+    /** ExaltDS's HD cutscenes: the movie the game plays and where the top screen is (see crates/zakuro-android/src/movies.rs). */
+    private native String nativeMovie(float[] out);
+    private HdMovies movies;
+    /** the HD cutscenes' switch in the sidebar, live. */
+    void setHdMovies(boolean on) { HdMovies.setEnabled(this, getIntent().getStringExtra("game_id"), on); if (movies != null) movies.setOn(on); }
+    /** after HD cutscenes were imported or removed. */
+    void refreshHdMovies() { if (movies != null) movies.refresh(); }
+    /** whether the game is stopped for a menu, which freezes an HD cutscene instead of hiding it. */
+    boolean emulationPaused() { return menuOpen || errorDialog != null || (sidebar != null && sidebar.isOpen()); }
+    /** the second display's window, while the game shows on one. */
+    android.app.Dialog presentation() { return secondDisplay; }
     /** Recall Fate (Fire Emblem Awakening): the turns whose player phase can be gone back to, newest first */
     int[] recallTurns() { int[] out=new int[16]; int n=Math.min(nativeRecallTurns(out), out.length); return java.util.Arrays.copyOf(out, n); }
     void command(int command) { nativeCommand(command); }
@@ -255,6 +266,8 @@ public final class Game extends NativeActivity {
             perf.setLevel(Exalt.perfLevel(this));
             panel(perf, android.view.Gravity.TOP | android.view.Gravity.START, false, -2, -2, dp(6), dp(6));
             telemetry(ExaltTelemetry.enabled(this));
+            movies = new HdMovies(this, id, this::nativeMovie, this::emulationPaused);
+            movies.start();
         }
         if (settings.flag("touch_controls")) {
             android.widget.LinearLayout controls = new android.widget.LinearLayout(this);
@@ -546,6 +559,7 @@ public final class Game extends NativeActivity {
             try { hintSession.close(); } catch (Throwable e) { android.util.Log.w("Zakuro", "Closing hint session", e); }
             hintSession = null;
         }
+        if (movies != null) { movies.stop(); movies = null; }
         if (inputManager != null) inputManager.unregisterInputDeviceListener(inputListener);
         if (batteryRegistered) { unregisterReceiver(batteryReceiver); batteryRegistered=false; }
         if (displays != null) displays.unregisterDisplayListener(displayListener);

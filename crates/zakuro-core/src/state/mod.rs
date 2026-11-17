@@ -182,6 +182,8 @@ impl System {
     pub fn load_core(&mut self, state: &[u8], memories: [&[u8]; 4]) -> Result<(), String> {
         self.idle_interrupted(true);
         self.spin.forget();
+        // a movie playing goes on from the state's own frame, which the movie watch can't know
+        crate::movies::reset();
         let saved: Saved = postcard::from_bytes(state).map_err(|error| format!("the state could not be read, {error}"))?;
         let phys = &self.memory.phys;
         let sizes = [phys.fcram.len(), phys.vram.len(), phys.dsp_ram.len(), phys.axi_wram.len()];

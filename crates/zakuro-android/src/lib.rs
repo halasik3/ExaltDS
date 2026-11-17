@@ -17,6 +17,8 @@ mod input;
 #[cfg(target_os = "android")]
 mod platform;
 #[cfg(any(target_os = "android", test))]
+mod movies;
+#[cfg(any(target_os = "android", test))]
 mod pacing;
 #[cfg(any(target_os = "android", test))]
 mod presentation;
